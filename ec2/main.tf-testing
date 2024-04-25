@@ -1,0 +1,21 @@
+
+resource "null_resource" "check_mysqld" {
+  depends_on = [aws_instance.web1]
+
+   connection {
+    type        = "ssh"
+    user        = "ec2-user"  # Specify the appropriate SSH username for your instances
+    private_key = local_file.tfm_ec2_key.filename  # Specify the path to your private key
+    host        = aws_instance.web1.public_ip  # Use the public IP of the jump host
+    agent       = false
+  }
+  provisioner "remote-exec" {
+    inline = [
+      "ssh -A -i "${local_file.tfm_ec2_key.filename}" -o 'StrictHostKeyChecking no' ec2-user@aws_instance.web1.public_ip ec2-user@aws_instance.db1.private_ip 'sudo systemctl status mysqld > /tmp/mysqld_status.txt'"
+    ]
+  }
+  provisioner "local-exec" {
+    command = "scp -o 'StrictHostKeyChecking no' ec2-user@${aws_instance.web1.public_ip}:/tmp/mysqld_status.txt mysqld_status.txt"
+  }
+}
+

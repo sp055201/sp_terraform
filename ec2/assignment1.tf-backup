@@ -1,0 +1,69 @@
+
+resource "aws_vpc" "tfm_vpc" {
+  cidr_block = "13.0.0.0/16"
+}
+
+resource "aws_subnet" "tfm_pub_subnet1" {
+  vpc_id     = aws_vpc.tfm_vpc.id
+  cidr_block = "13.0.1.0/24"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_internet_gateway" "tfm_gw" {
+  vpc_id = aws_vpc.tfm_vpc.id
+}
+
+resource "aws_route_table" "tfm_pub_rt" {
+  vpc_id = aws_vpc.tfm_vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.tfm_gw.id
+  }
+
+}
+
+resource "aws_route_table_association" "tfm_pub_rt_subnet" {
+  subnet_id      = aws_subnet.tfm_pub_subnet1.id
+  route_table_id = aws_route_table.tfm_pub_rt.id
+}
+
+resource "aws_instance" "tfm_ec2" {
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.tfm_ec2_key.id
+  vpc_security_group_ids = [aws_security_group.tfm_ec2_sg.id]
+  subnet_id     = aws_subnet.tfm_pub_subnet1.id
+}
+
+
+resource "tls_private_key" "tfm_ec2_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+resource "local_file" "tfm_ec2_key" {
+  filename = "tfm_ec2_key.pem"
+  content  = tls_private_key.tfm_ec2_key.private_key_pem
+}
+resource "aws_key_pair" "tfm_ec2_key" {
+  key_name   = "tfm_ec2_key"
+  public_key = tls_private_key.tfm_ec2_key.public_key_openssh
+}
+
+resource "aws_security_group" "tfm_ec2_sg" {
+  name        = "tfm_ec2_sg"
+  description = "security group for ec2 "
+  vpc_id      = aws_vpc.tfm_vpc.id
+}
+resource "aws_vpc_security_group_ingress_rule" "allow_inbound_ipv4" {
+  security_group_id = aws_security_group.tfm_ec2_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 22
+  ip_protocol       = "tcp"
+  to_port           = 22
+}
+resource "aws_vpc_security_group_egress_rule" "allow_outbound_ipv4" {
+  security_group_id = aws_security_group.tfm_ec2_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1" # semantically equivalent to all ports
+}
+
